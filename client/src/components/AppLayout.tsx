@@ -1,5 +1,12 @@
 import './AppLayout.css'
 import MapView from './MapView'
+import RouteControls from './RouteControls'
+import type { RouteRequest } from './RouteControls'
+
+function handleRouteRequest(request: RouteRequest) {
+  // Placeholder – will be replaced when geocoding + routing are integrated
+  console.log('[NavBeats] Route request:', request);
+}
 
 function AppLayout() {
   return (
@@ -22,9 +29,7 @@ function AppLayout() {
 
         <section className="app-main__panel app-main__panel--controls">
           <h2 className="app-main__panel-title">Route &amp; controls</h2>
-          <p className="app-main__panel-placeholder">
-            Route input, playback controls, and vibe tuning will live here.
-          </p>
+          <RouteControls onRouteRequest={handleRouteRequest} />
         </section>
       </main>
     </div>

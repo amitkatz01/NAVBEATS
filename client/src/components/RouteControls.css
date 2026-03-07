@@ -1,0 +1,252 @@
+/* ── Layout ────────────────────────────────────────────────────────────── */
+
+.route-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 1.25rem;
+  width: 100%;
+}
+
+/* ── Input fields ──────────────────────────────────────────────────────── */
+
+.route-controls__fields {
+  display: flex;
+  flex-direction: column;
+  gap: 0;
+  background: rgba(147, 51, 234, 0.04);
+  border: 1px solid var(--border-accent);
+  border-radius: 12px;
+  overflow: visible;
+  padding: 0.75rem;
+  gap: 0.1rem;
+}
+
+.route-controls__field {
+  display: flex;
+  flex-direction: column;
+  gap: 0.4rem;
+}
+
+.route-controls__label {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  font-size: 0.72rem;
+  font-weight: 600;
+  text-transform: uppercase;
+  letter-spacing: 0.14em;
+  color: var(--text-tertiary);
+  user-select: none;
+}
+
+.route-controls__label-icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  color: var(--accent-secondary);
+  filter: drop-shadow(0 0 4px var(--accent-glow));
+  flex-shrink: 0;
+}
+
+.route-controls__label-icon--dest {
+  color: var(--accent-tertiary);
+  filter: drop-shadow(0 0 4px rgba(192, 132, 252, 0.5));
+}
+
+.route-controls__input-wrapper {
+  position: relative;
+}
+
+.route-controls__input {
+  width: 100%;
+  background: transparent;
+  border: 1px solid transparent;
+  border-radius: 8px;
+  padding: 0.65rem 0.85rem;
+  font-size: 0.9rem;
+  color: var(--text-primary);
+  transition: border-color 0.2s ease, box-shadow 0.2s ease, background 0.2s ease;
+}
+
+.route-controls__input:hover {
+  border-color: var(--border-accent);
+  background: rgba(147, 51, 234, 0.05);
+}
+
+.route-controls__input:focus {
+  outline: none;
+  border-color: var(--accent-primary);
+  background: rgba(147, 51, 234, 0.08);
+  box-shadow:
+    0 0 0 3px rgba(147, 51, 234, 0.12),
+    0 0 16px rgba(147, 51, 234, 0.25);
+}
+
+.route-controls__input::placeholder {
+  color: var(--text-tertiary);
+  font-size: 0.88rem;
+}
+
+/* ── Connector between inputs ──────────────────────────────────────────── */
+
+.route-controls__connector {
+  display: flex;
+  align-items: center;
+  padding: 0.15rem 0 0.15rem 0.95rem;
+  pointer-events: none;
+}
+
+.route-controls__connector-line {
+  width: 1px;
+  height: 18px;
+  background: linear-gradient(
+    to bottom,
+    var(--accent-secondary),
+    var(--accent-primary)
+  );
+  opacity: 0.4;
+  border-radius: 1px;
+}
+
+/* ── Transport mode toggle ─────────────────────────────────────────────── */
+
+.route-controls__mode-group {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 4px;
+  padding: 4px;
+  background: var(--bg-secondary);
+  border: 1px solid var(--border-accent);
+  border-radius: 12px;
+}
+
+.route-controls__mode-btn {
+  /* Reset global button styles */
+  border: none;
+  box-shadow: none;
+  background: transparent;
+  border-radius: 9px;
+  padding: 0.6rem 0.75rem;
+  font-size: 0.85rem;
+  font-weight: 500;
+  color: var(--text-secondary);
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.45rem;
+  transition: background 0.18s ease, color 0.18s ease, box-shadow 0.18s ease;
+  position: relative;
+  overflow: hidden;
+}
+
+/* Suppress the global shimmer sweep on mode buttons */
+.route-controls__mode-btn::before {
+  display: none;
+}
+
+.route-controls__mode-btn:hover:not(.route-controls__mode-btn--active) {
+  background: rgba(147, 51, 234, 0.1);
+  color: var(--text-primary);
+  box-shadow: none;
+  transform: none;
+}
+
+.route-controls__mode-btn--active {
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary) 0%,
+    var(--accent-secondary) 100%
+  );
+  color: #fff;
+  box-shadow: 0 0 16px var(--accent-glow), inset 0 1px 0 rgba(255, 255, 255, 0.1);
+}
+
+.route-controls__mode-btn--active:hover {
+  background: linear-gradient(
+    135deg,
+    var(--accent-primary) 0%,
+    var(--accent-secondary) 100%
+  );
+  color: #fff;
+  box-shadow: 0 0 20px var(--accent-glow-strong);
+  transform: none;
+  border-color: transparent;
+  background-color: unset;
+}
+
+/* ── Submit button ─────────────────────────────────────────────────────── */
+
+.route-controls__submit {
+  width: 100%;
+  padding: 0.85rem 1.25rem;
+  font-size: 0.9rem;
+  font-weight: 600;
+  letter-spacing: 0.1em;
+  text-transform: uppercase;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+  color: #fff;
+  border: none;
+  border-radius: 12px;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.6rem;
+  transition: opacity 0.2s ease, box-shadow 0.2s ease, transform 0.15s ease;
+  box-shadow:
+    0 0 22px var(--accent-glow),
+    0 4px 14px rgba(0, 0, 0, 0.45);
+  position: relative;
+  overflow: hidden;
+}
+
+/* Shimmer sweep override (ensure it uses white instead of accent) */
+.route-controls__submit::before {
+  background: linear-gradient(90deg, transparent, rgba(255, 255, 255, 0.14), transparent);
+}
+
+.route-controls__submit:hover:not(:disabled) {
+  opacity: 0.92;
+  box-shadow:
+    0 0 30px var(--accent-glow-strong),
+    0 6px 20px rgba(0, 0, 0, 0.5);
+  transform: translateY(-1px);
+  border-color: transparent;
+  background-color: unset;
+  background: linear-gradient(135deg, var(--accent-primary) 0%, var(--accent-secondary) 100%);
+}
+
+.route-controls__submit:active:not(:disabled) {
+  transform: translateY(0);
+}
+
+.route-controls__submit:disabled {
+  opacity: 0.3;
+  cursor: not-allowed;
+  box-shadow: none;
+  transform: none;
+}
+
+.route-controls__submit:focus-visible {
+  outline: 2px solid var(--accent-tertiary);
+  outline-offset: 3px;
+}
+
+/* ── Autocomplete suggestion list slot ────────────────────────────────── */
+/* Empty now; positioned absolutely inside .route-controls__input-wrapper  */
+
+.route-controls__suggestions {
+  position: absolute;
+  top: calc(100% + 6px);
+  left: 0;
+  right: 0;
+  background: var(--bg-tertiary);
+  border: 1px solid var(--border-accent);
+  border-radius: 10px;
+  box-shadow:
+    0 8px 28px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(147, 51, 234, 0.08);
+  z-index: 200;
+  overflow: hidden;
+}

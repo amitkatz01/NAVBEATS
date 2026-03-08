@@ -25,6 +25,8 @@ export interface RouteControlsProps {
   /** Called when the user presses "Generate Route". Receives the full request
    *  object; coords will be null until geocoding is wired in. */
   onRouteRequest?: (request: RouteRequest) => void;
+  /** Disables the submit button while the parent is geocoding. */
+  isLoading?: boolean;
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -93,12 +95,15 @@ function IconArrow() {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-function RouteControls({ onRouteRequest }: RouteControlsProps) {
+function RouteControls({ onRouteRequest, isLoading = false }: RouteControlsProps) {
   const [originText, setOriginText] = useState('');
   const [destinationText, setDestinationText] = useState('');
   const [mode, setMode] = useState<TransportMode>('drive');
 
-  const canSubmit = originText.trim().length > 0 && destinationText.trim().length > 0;
+  const canSubmit =
+    !isLoading &&
+    originText.trim().length > 0 &&
+    destinationText.trim().length > 0;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
@@ -197,15 +202,15 @@ function RouteControls({ onRouteRequest }: RouteControlsProps) {
         </button>
       </div>
 
-      {/* ── Generate Route ── */}
+      {/* ── Generate Playlist ── */}
       <button
         type="submit"
         className="route-controls__submit"
         disabled={!canSubmit}
         aria-disabled={!canSubmit}
       >
-        <span>Generate Route</span>
-        <IconArrow />
+        <span>{isLoading ? 'Locating…' : 'Generate Playlist'}</span>
+        {!isLoading && <IconArrow />}
       </button>
 
     </form>

@@ -1,8 +1,10 @@
 import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
+import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './MapView.css';
+import RouteInfoPanel from './RouteInfoPanel';
+import type { RouteInfoPanelProps } from './RouteInfoPanel';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
@@ -38,25 +40,41 @@ function makeDivIcon(type: 'origin' | 'destination'): L.DivIcon {
   return L.divIcon({
     className: '',  // strip Leaflet's default white-box class
     html: svg,
-    iconSize:   isOrigin ? [22, 22] : [22, 30],
-    iconAnchor: isOrigin ? [11, 11] : [11, 30],  // anchor at center / pin tip
+    iconSize:      isOrigin ? [22, 22] : [22, 30],
+    iconAnchor:    isOrigin ? [11, 11] : [11, 30],
     tooltipAnchor: [12, isOrigin ? -11 : -15],
   });
 }
 
 // ── MapController ──────────────────────────────────────────────────────────
 // Lives *inside* MapContainer so it can call useMap(). Fits the viewport to
-// the two markers whenever they change. Renders nothing itself.
+// the route when one exists, otherwise falls back to the two markers.
+// Renders nothing itself.
 
-function MapController({ markers }: { markers: RouteMarker[] }) {
+interface MapControllerProps {
+  markers: RouteMarker[];
+  routeCoordinates: [number, number][];
+}
+
+function MapController({ markers, routeCoordinates }: MapControllerProps) {
   const map = useMap();
 
   useEffect(() => {
-    if (markers.length < 2) return;
-
-    const bounds = L.latLngBounds(markers.map((m) => m.position));
-    map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
-  }, [map, markers]);
+    if (routeCoordinates.length >= 2) {
+      // Fit to the full decoded route for the tightest, most accurate viewport
+      const bounds = L.latLngBounds(routeCoordinates);
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
+    } else if (markers.length >= 2) {
+      // Fallback: markers placed but route not yet fetched
+      const bounds = L.latLngBounds(markers.map((m) => m.position));
+      map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
+    } else if (markers.length === 1) {
+      // Single preview marker — smoothly fly to it so the map feels responsive
+      const [lat, lng] = markers[0].position;
+      const targetZoom = Math.max(map.getZoom(), 13);
+      map.flyTo([lat, lng], targetZoom, { duration: 0.8 });
+    }
+  }, [map, markers, routeCoordinates]);
 
   return null;
 }
@@ -65,11 +83,24 @@ function MapController({ markers }: { markers: RouteMarker[] }) {
 
 export interface MapViewProps {
   markers?: RouteMarker[];
+  /**
+   * Ordered [lat, lng] path from the routing utility.
+   * When present, a styled Polyline is drawn and bounds are fitted to the
+   * full route instead of just the endpoint markers.
+   */
+  routeCoordinates?: [number, number][];
+  /**
+   * When provided, the floating route-info pill is rendered over the map.
+   * AppLayout passes this only after a route has resolved.
+   */
+  routeInfo?: RouteInfoPanelProps;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-function MapView({ markers = [] }: MapViewProps) {
+function MapView({ markers = [], routeCoordinates = [], routeInfo }: MapViewProps) {
+  const hasRoute = routeCoordinates.length >= 2;
+
   return (
     <div className="map-view">
       <MapContainer
@@ -85,6 +116,23 @@ function MapView({ markers = [] }: MapViewProps) {
           maxZoom={19}
         />
 
+        {/* Route polyline — two stacked layers for a neon-glow effect */}
+        {hasRoute && (
+          <>
+            {/* Outer glow */}
+            <Polyline
+              positions={routeCoordinates}
+              pathOptions={{ color: '#9333ea', weight: 10, opacity: 0.25 }}
+            />
+            {/* Main line */}
+            <Polyline
+              positions={routeCoordinates}
+              pathOptions={{ color: '#c084fc', weight: 3.5, opacity: 0.92 }}
+            />
+          </>
+        )}
+
+        {/* Endpoint markers — rendered on top of the polyline */}
         {markers.map((marker) => (
           <Marker
             key={marker.type}
@@ -95,8 +143,12 @@ function MapView({ markers = [] }: MapViewProps) {
         ))}
 
         {/* Handles fitBounds imperatively inside the map context */}
-        <MapController markers={markers} />
+        <MapController markers={markers} routeCoordinates={routeCoordinates} />
       </MapContainer>
+
+      {/* Floating info pill — rendered outside MapContainer so it sits in
+          .map-view's stacking context, above the Leaflet tile layers */}
+      {routeInfo && <RouteInfoPanel {...routeInfo} />}
     </div>
   );
 }

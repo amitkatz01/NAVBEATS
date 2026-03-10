@@ -118,7 +118,10 @@
 }
 
 .app-main__panel--controls {
-  min-height: 220px;
+  /* Allow the autocomplete dropdowns to extend outside the panel boundary.
+     The map panel keeps overflow: hidden (set on .app-main__panel) for its
+     flush-fill behaviour; the controls panel doesn't need clipping. */
+  overflow: visible;
 }
 
 @media (max-width: 900px) {

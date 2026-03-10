@@ -1,11 +1,14 @@
 import { useState } from 'react';
 import './RouteControls.css';
+import { useAutocomplete } from '../hooks/useAutocomplete';
+import SuggestionDropdown from './SuggestionDropdown';
+import type { SearchResult } from '../services/searchService';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
 export type TransportMode = 'drive' | 'walk';
 
-/** Geographic coordinate pair – populated by geocoding (not yet implemented). */
+/** Geographic coordinate pair – used for all location payloads. */
 export interface LatLng {
   lat: number;
   lng: number;
@@ -21,12 +24,21 @@ export interface RouteRequest {
   mode: TransportMode;
 }
 
+export type LocationRole = 'origin' | 'destination';
+
+export interface LocationSelection {
+  coords: LatLng;
+  label: string;
+}
+
 export interface RouteControlsProps {
   /** Called when the user presses "Generate Route". Receives the full request
    *  object; coords will be null until geocoding is wired in. */
   onRouteRequest?: (request: RouteRequest) => void;
   /** Disables the submit button while the parent is geocoding. */
   isLoading?: boolean;
+  /** Emits coordinates as soon as the user picks a suggestion in either field. */
+  onLocationPreview?: (role: LocationRole, selection: LocationSelection) => void;
 }
 
 // ── Icons ──────────────────────────────────────────────────────────────────
@@ -95,24 +107,41 @@ function IconArrow() {
 
 // ── Component ──────────────────────────────────────────────────────────────
 
-function RouteControls({ onRouteRequest, isLoading = false }: RouteControlsProps) {
-  const [originText, setOriginText] = useState('');
-  const [destinationText, setDestinationText] = useState('');
+function RouteControls({ onRouteRequest, isLoading = false, onLocationPreview }: RouteControlsProps) {
   const [mode, setMode] = useState<TransportMode>('drive');
+
+  const origin = useAutocomplete();
+  const dest   = useAutocomplete();
+
+  const handleOriginSelect = (result: SearchResult) => {
+    origin.selectSuggestion(result);
+    onLocationPreview?.('origin', {
+      coords: { lat: result.lat, lng: result.lon },
+      label: result.displayName,
+    });
+  };
+
+  const handleDestinationSelect = (result: SearchResult) => {
+    dest.selectSuggestion(result);
+    onLocationPreview?.('destination', {
+      coords: { lat: result.lat, lng: result.lon },
+      label: result.displayName,
+    });
+  };
 
   const canSubmit =
     !isLoading &&
-    originText.trim().length > 0 &&
-    destinationText.trim().length > 0;
+    origin.inputValue.trim().length > 0 &&
+    dest.inputValue.trim().length > 0;
 
   function handleSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault();
     if (!canSubmit) return;
 
     onRouteRequest?.({
-      originText: originText.trim(),
-      destinationText: destinationText.trim(),
-      originCoords: null,       // geocoding not yet implemented
+      originText:      origin.inputValue.trim(),
+      destinationText: dest.inputValue.trim(),
+      originCoords:      null,
       destinationCoords: null,
       mode,
     });
@@ -132,19 +161,37 @@ function RouteControls({ onRouteRequest, isLoading = false }: RouteControlsProps
             </span>
             Start
           </label>
-          {/* Wrapper keeps future autocomplete dropdown in scope */}
-          <div className="route-controls__input-wrapper">
+
+          <div className="route-controls__input-wrapper" ref={origin.wrapperRef}>
             <input
               id="rc-origin"
               type="text"
               className="route-controls__input"
               placeholder="Enter start location…"
-              value={originText}
-              onChange={(e) => setOriginText(e.target.value)}
+              value={origin.inputValue}
+              onChange={origin.handleChange}
+              onKeyDown={origin.handleKeyDown}
+              onBlur={origin.handleBlur}
               autoComplete="off"
               spellCheck={false}
+              role="combobox"
+              aria-expanded={origin.isOpen}
+              aria-autocomplete="list"
+              aria-controls="rc-origin-list"
+              aria-activedescendant={
+                origin.activeIndex >= 0
+                  ? `rc-origin-list-opt-${origin.activeIndex}`
+                  : undefined
+              }
             />
-            {/* Autocomplete suggestion list – hoisted here later */}
+            {origin.isOpen && (
+              <SuggestionDropdown
+                id="rc-origin-list"
+                suggestions={origin.suggestions}
+                activeIndex={origin.activeIndex}
+                onSelect={handleOriginSelect}
+              />
+            )}
           </div>
         </div>
 
@@ -161,17 +208,37 @@ function RouteControls({ onRouteRequest, isLoading = false }: RouteControlsProps
             </span>
             Destination
           </label>
-          <div className="route-controls__input-wrapper">
+
+          <div className="route-controls__input-wrapper" ref={dest.wrapperRef}>
             <input
               id="rc-destination"
               type="text"
               className="route-controls__input"
               placeholder="Enter destination…"
-              value={destinationText}
-              onChange={(e) => setDestinationText(e.target.value)}
+              value={dest.inputValue}
+              onChange={dest.handleChange}
+              onKeyDown={dest.handleKeyDown}
+              onBlur={dest.handleBlur}
               autoComplete="off"
               spellCheck={false}
+              role="combobox"
+              aria-expanded={dest.isOpen}
+              aria-autocomplete="list"
+              aria-controls="rc-destination-list"
+              aria-activedescendant={
+                dest.activeIndex >= 0
+                  ? `rc-destination-list-opt-${dest.activeIndex}`
+                  : undefined
+              }
             />
+            {dest.isOpen && (
+              <SuggestionDropdown
+                id="rc-destination-list"
+                suggestions={dest.suggestions}
+                activeIndex={dest.activeIndex}
+                onSelect={handleDestinationSelect}
+              />
+            )}
           </div>
         </div>
       </div>
@@ -202,14 +269,14 @@ function RouteControls({ onRouteRequest, isLoading = false }: RouteControlsProps
         </button>
       </div>
 
-      {/* ── Generate Playlist ── */}
+      {/* ── Generate Route ── */}
       <button
         type="submit"
         className="route-controls__submit"
         disabled={!canSubmit}
         aria-disabled={!canSubmit}
       >
-        <span>{isLoading ? 'Locating…' : 'Generate Playlist'}</span>
+        <span>{isLoading ? 'Locating…' : 'Generate Route'}</span>
         {!isLoading && <IconArrow />}
       </button>
 

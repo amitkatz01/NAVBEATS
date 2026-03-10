@@ -1,0 +1,79 @@
+/* ── Container ─────────────────────────────────────────────────────────── */
+
+.route-info-panel {
+  /* Overlay positioning — parent (.map-view) is position: relative */
+  position: absolute;
+  bottom: 28px;
+  left: 50%;
+  transform: translateX(-50%);
+  /* Sit above the Leaflet tile pane (~400) but not over zoom controls (~1000) */
+  z-index: 500;
+
+  /* Layout */
+  display: flex;
+  align-items: center;
+  gap: 0.55rem;
+  white-space: nowrap;
+
+  /* Pill shape */
+  padding: 0.45rem 1.1rem;
+  border-radius: 999px;
+
+  /* Dark glass */
+  background: rgba(6, 2, 15, 0.8);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+
+  /* Purple border + glow */
+  border: 1px solid var(--border-accent);
+  box-shadow:
+    0 4px 24px rgba(0, 0, 0, 0.65),
+    0 0 0 1px rgba(147, 51, 234, 0.08),
+    0 0 18px rgba(147, 51, 234, 0.12);
+
+  /* Typography */
+  font-size: 0.84rem;
+  font-weight: 500;
+  color: var(--text-primary);
+
+  /* Don't block map pan/zoom interaction beneath it */
+  pointer-events: none;
+
+  /* Entrance animation */
+  animation: rip-fade-in 0.35s cubic-bezier(0.22, 1, 0.36, 1) both;
+}
+
+/* ── Entrance keyframe ─────────────────────────────────────────────────── */
+
+@keyframes rip-fade-in {
+  from {
+    opacity: 0;
+    transform: translateX(-50%) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(-50%) translateY(0);
+  }
+}
+
+/* ── Items ─────────────────────────────────────────────────────────────── */
+
+.route-info-panel__item {
+  color: var(--text-primary);
+  letter-spacing: 0.01em;
+}
+
+.route-info-panel__item--mode {
+  color: var(--accent-tertiary);
+  font-weight: 600;
+  letter-spacing: 0.04em;
+  text-transform: uppercase;
+  font-size: 0.75rem;
+}
+
+.route-info-panel__sep {
+  color: var(--text-tertiary);
+  font-size: 0.65rem;
+  line-height: 1;
+  flex-shrink: 0;
+}

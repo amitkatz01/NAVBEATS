@@ -1,5 +1,5 @@
-import { useEffect } from 'react';
-import { MapContainer, TileLayer, Marker, Polyline, useMap } from 'react-leaflet';
+import { useEffect, useRef } from 'react';
+import { MapContainer, TileLayer, Marker, useMap } from 'react-leaflet';
 import L from 'leaflet';
 import 'leaflet/dist/leaflet.css';
 import './MapView.css';
@@ -8,37 +8,30 @@ import type { RouteInfoPanelProps } from './RouteInfoPanel';
 
 // ── Types ──────────────────────────────────────────────────────────────────
 
-/** A single pin to place on the map. */
 export interface RouteMarker {
-  /** [lat, lng] – matches Leaflet's LatLngTuple so no conversion needed. */
   position: [number, number];
   type: 'origin' | 'destination';
-  /** Human-readable label from the geocoder, used as the native tooltip. */
   label: string;
 }
 
 // ── Custom DivIcons ────────────────────────────────────────────────────────
-// Leaflet's default PNG icons break in Vite builds (missing asset paths).
-// SVG-based DivIcons sidestep that entirely and match the purple/neon theme.
 
 function makeDivIcon(type: 'origin' | 'destination'): L.DivIcon {
   const isOrigin = type === 'origin';
 
   const svg = isOrigin
-    ? /* ring + dot */
-      `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
+    ? `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="22" viewBox="0 0 22 22">
          <circle cx="11" cy="11" r="9" fill="#9333ea" stroke="#c084fc" stroke-width="2"/>
          <circle cx="11" cy="11" r="3.5" fill="#fff"/>
        </svg>`
-    : /* teardrop pin */
-      `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="30" viewBox="0 0 22 30">
+    : `<svg xmlns="http://www.w3.org/2000/svg" width="22" height="30" viewBox="0 0 22 30">
          <path d="M11 0C4.925 0 0 4.925 0 11c0 8.25 11 19 11 19S22 19.25 22 11C22 4.925 17.075 0 11 0z"
                fill="#a855f7" stroke="#c084fc" stroke-width="1.5"/>
          <circle cx="11" cy="11" r="4" fill="#fff"/>
        </svg>`;
 
   return L.divIcon({
-    className: '',  // strip Leaflet's default white-box class
+    className: '',
     html: svg,
     iconSize:      isOrigin ? [22, 22] : [22, 30],
     iconAnchor:    isOrigin ? [11, 11] : [11, 30],
@@ -46,10 +39,146 @@ function makeDivIcon(type: 'origin' | 'destination'): L.DivIcon {
   });
 }
 
+// ── Route geometry helpers ─────────────────────────────────────────────────
+
+/**
+ * Builds an array of cumulative Euclidean distances between consecutive
+ * coordinate pairs.  The values are in lat/lng units — sufficient for a
+ * constant-speed animation; geographic accuracy is not required here.
+ */
+function buildCumulativeDistances(coords: [number, number][]): number[] {
+  const dists: number[] = [0];
+  for (let i = 1; i < coords.length; i++) {
+    const [lat1, lng1] = coords[i - 1];
+    const [lat2, lng2] = coords[i];
+    dists.push(dists[i - 1] + Math.hypot(lat2 - lat1, lng2 - lng1));
+  }
+  return dists;
+}
+
+/**
+ * Returns the route prefix (start → interpolated point at targetDist) as a
+ * coordinate array.  Uses a binary search to locate the containing segment,
+ * then linearly interpolates within it.
+ */
+function getRouteSlice(
+  coords: [number, number][],
+  cumDist: number[],
+  targetDist: number,
+): [number, number][] {
+  let lo = 0;
+  let hi = coords.length - 1;
+
+  while (lo < hi - 1) {
+    const mid = (lo + hi) >> 1;
+    if (cumDist[mid] <= targetDist) lo = mid;
+    else hi = mid;
+  }
+
+  const segLen = cumDist[lo + 1] - cumDist[lo];
+  const t = segLen === 0 ? 0 : (targetDist - cumDist[lo]) / segLen;
+
+  const [lat1, lng1] = coords[lo];
+  const [lat2, lng2] = coords[lo + 1] ?? coords[lo];
+  const interp: [number, number] = [lat1 + (lat2 - lat1) * t, lng1 + (lng2 - lng1) * t];
+
+  return [...coords.slice(0, lo + 1), interp];
+}
+
+// ── Easing ─────────────────────────────────────────────────────────────────
+
+function easeInOut(t: number): number {
+  return t < 0.5 ? 2 * t * t : -1 + (4 - 2 * t) * t;
+}
+
+// ── RouteAnimator ──────────────────────────────────────────────────────────
+// Null-rendering component — lives inside MapContainer so it can call
+// useMap().  Manages route reveal animation entirely via imperative Leaflet
+// calls; zero React re-renders during animation.
+
+const HEAD_ICON = L.divIcon({
+  className: '',
+  html: '<div class="route-head"><div class="route-head__pulse"></div></div>',
+  iconSize:   [18, 18],
+  iconAnchor: [9, 9],
+});
+
+const ANIM_DURATION_MS = 2000;
+
+function RouteAnimator({ routeCoordinates }: { routeCoordinates: [number, number][] }) {
+  const map        = useMap();
+  const rafRef     = useRef<number>(0);
+  const layersRef  = useRef<L.Layer[]>([]);
+
+  useEffect(() => {
+    // ── Cleanup previous animation ────────────────────────────────────────
+    cancelAnimationFrame(rafRef.current);
+    layersRef.current.forEach((l) => { try { l.remove(); } catch { /* already gone */ } });
+    layersRef.current = [];
+
+    if (routeCoordinates.length < 2) return;
+
+    // ── Pre-compute geometry ──────────────────────────────────────────────
+    const cumDist   = buildCumulativeDistances(routeCoordinates);
+    const totalDist = cumDist[cumDist.length - 1];
+
+    // ── Create imperative Leaflet layers ──────────────────────────────────
+    const glowLine = L.polyline([], {
+      color: '#9333ea', weight: 10, opacity: 0.25,
+    }).addTo(map);
+
+    const crispLine = L.polyline([], {
+      color: '#c084fc', weight: 3.5, opacity: 0.92,
+    }).addTo(map);
+
+    const headMarker = L.marker(routeCoordinates[0], {
+      icon: HEAD_ICON,
+      interactive: false,
+      zIndexOffset: 1000,
+    }).addTo(map);
+
+    layersRef.current = [glowLine, crispLine, headMarker];
+
+    // ── rAF animation loop ────────────────────────────────────────────────
+    const startTime = performance.now();
+
+    function frame(now: number) {
+      const rawT = Math.min((now - startTime) / ANIM_DURATION_MS, 1);
+      const t    = easeInOut(rawT);
+
+      const slice    = getRouteSlice(routeCoordinates, cumDist, t * totalDist);
+      const headPos  = slice[slice.length - 1] as L.LatLngExpression;
+
+      glowLine.setLatLngs(slice);
+      crispLine.setLatLngs(slice);
+      headMarker.setLatLng(headPos);
+
+      if (rawT < 1) {
+        rafRef.current = requestAnimationFrame(frame);
+      } else {
+        // Fade the head marker out once the line is fully drawn
+        const el = headMarker.getElement();
+        if (el) {
+          el.style.transition = 'opacity 0.7s ease';
+          el.style.opacity    = '0';
+        }
+      }
+    }
+
+    rafRef.current = requestAnimationFrame(frame);
+
+    // ── Cleanup on unmount / next route ──────────────────────────────────
+    return () => {
+      cancelAnimationFrame(rafRef.current);
+      layersRef.current.forEach((l) => { try { l.remove(); } catch { /* already gone */ } });
+      layersRef.current = [];
+    };
+  }, [map, routeCoordinates]);
+
+  return null;
+}
+
 // ── MapController ──────────────────────────────────────────────────────────
-// Lives *inside* MapContainer so it can call useMap(). Fits the viewport to
-// the route when one exists, otherwise falls back to the two markers.
-// Renders nothing itself.
 
 interface MapControllerProps {
   markers: RouteMarker[];
@@ -61,18 +190,14 @@ function MapController({ markers, routeCoordinates }: MapControllerProps) {
 
   useEffect(() => {
     if (routeCoordinates.length >= 2) {
-      // Fit to the full decoded route for the tightest, most accurate viewport
       const bounds = L.latLngBounds(routeCoordinates);
       map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
     } else if (markers.length >= 2) {
-      // Fallback: markers placed but route not yet fetched
       const bounds = L.latLngBounds(markers.map((m) => m.position));
       map.fitBounds(bounds, { padding: [60, 60], maxZoom: 14 });
     } else if (markers.length === 1) {
-      // Single preview marker — smoothly fly to it so the map feels responsive
       const [lat, lng] = markers[0].position;
-      const targetZoom = Math.max(map.getZoom(), 13);
-      map.flyTo([lat, lng], targetZoom, { duration: 0.8 });
+      map.flyTo([lat, lng], Math.max(map.getZoom(), 13), { duration: 0.8 });
     }
   }, [map, markers, routeCoordinates]);
 
@@ -83,24 +208,13 @@ function MapController({ markers, routeCoordinates }: MapControllerProps) {
 
 export interface MapViewProps {
   markers?: RouteMarker[];
-  /**
-   * Ordered [lat, lng] path from the routing utility.
-   * When present, a styled Polyline is drawn and bounds are fitted to the
-   * full route instead of just the endpoint markers.
-   */
   routeCoordinates?: [number, number][];
-  /**
-   * When provided, the floating route-info pill is rendered over the map.
-   * AppLayout passes this only after a route has resolved.
-   */
   routeInfo?: RouteInfoPanelProps;
 }
 
 // ── Component ──────────────────────────────────────────────────────────────
 
 function MapView({ markers = [], routeCoordinates = [], routeInfo }: MapViewProps) {
-  const hasRoute = routeCoordinates.length >= 2;
-
   return (
     <div className="map-view">
       <MapContainer
@@ -116,23 +230,7 @@ function MapView({ markers = [], routeCoordinates = [], routeInfo }: MapViewProp
           maxZoom={19}
         />
 
-        {/* Route polyline — two stacked layers for a neon-glow effect */}
-        {hasRoute && (
-          <>
-            {/* Outer glow */}
-            <Polyline
-              positions={routeCoordinates}
-              pathOptions={{ color: '#9333ea', weight: 10, opacity: 0.25 }}
-            />
-            {/* Main line */}
-            <Polyline
-              positions={routeCoordinates}
-              pathOptions={{ color: '#c084fc', weight: 3.5, opacity: 0.92 }}
-            />
-          </>
-        )}
-
-        {/* Endpoint markers — rendered on top of the polyline */}
+        {/* Endpoint markers — sit above the animated polyline layers */}
         {markers.map((marker) => (
           <Marker
             key={marker.type}
@@ -142,12 +240,17 @@ function MapView({ markers = [], routeCoordinates = [], routeInfo }: MapViewProp
           />
         ))}
 
-        {/* Handles fitBounds imperatively inside the map context */}
+        {/*
+          RouteAnimator draws the animated glow + crisp lines and the moving
+          head imperatively.  It replaces the static <Polyline> pair so that
+          every new routeCoordinates prop triggers a fresh reveal animation.
+        */}
+        <RouteAnimator routeCoordinates={routeCoordinates} />
+
+        {/* Handles fitBounds / flyTo imperatively inside the map context */}
         <MapController markers={markers} routeCoordinates={routeCoordinates} />
       </MapContainer>
 
-      {/* Floating info pill — rendered outside MapContainer so it sits in
-          .map-view's stacking context, above the Leaflet tile layers */}
       {routeInfo && <RouteInfoPanel {...routeInfo} />}
     </div>
   );

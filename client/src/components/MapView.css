@@ -49,3 +49,34 @@
 .map-view .leaflet-control-attribution a:hover {
   color: var(--accent-tertiary);
 }
+
+/* ── Route reveal head marker ──────────────────────────────────────────── */
+
+.route-head {
+  width: 18px;
+  height: 18px;
+  border-radius: 50%;
+  background: #c084fc;
+  border: 2px solid #fff;
+  box-shadow:
+    0 0 0 3px rgba(192, 132, 252, 0.35),
+    0 0 10px #9333ea,
+    0 0 22px rgba(147, 51, 234, 0.55);
+  position: relative;
+  /* Sit on top of the polyline SVG layer */
+  z-index: 1;
+}
+
+.route-head__pulse {
+  position: absolute;
+  inset: -7px;
+  border: 2px solid rgba(192, 132, 252, 0.6);
+  border-radius: 50%;
+  animation: route-head-pulse 0.85s ease-out infinite;
+  pointer-events: none;
+}
+
+@keyframes route-head-pulse {
+  0%   { transform: scale(0.8);  opacity: 0.85; }
+  100% { transform: scale(1.55); opacity: 0;    }
+}
